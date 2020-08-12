@@ -1,83 +1,142 @@
 import Phaser from "phaser";
-import mp3 from "../assets/Orbital\ Colossus.mp3";
-import background from "../assets/scifi_platform_BG1.jpg";
-import tiles from "../assets/scifi_platformTiles_32x32.png";
-import star from "../assets/star.png"
+import background from "../assets/dungeon-bg.jpg";
+import hero from "../assets/hero.png";
+import enemy from "../assets/enemy.png";
+import boomerang from "../assets/boomerang.png";
 import { accelerate, decelerate } from "../utils";
 
-let box;
+let avatar;
 let cursors;
+let weapon;
 
 export default new Phaser.Class({
-  Extends: Phaser.Scene,
-  initialize: function () {
-    Phaser.Scene.call(this, { key: 'game' });
-    window.GAME = this;
-  },
-  preload: function preload() {
-    this.load.image("background", background);
+    Extends: Phaser.Scene,
+    initialize: function () {
+        Phaser.Scene.call(this, { key: "game" });
+        window.GAME = this;
+    },
+    preload: function preload() {
+        this.load.image("background", background);
 
-    this.load.spritesheet('tiles', tiles, {
-      frameWidth: 32,
-      frameHeight: 32
-    });
+        this.load.image("hero", hero);
 
-    this.load.image("star", star);
-  },
-  create: function create() {
-    this.add.image(400, 300, "background");
+        this.load.image("enemy", enemy);
 
-    const stars = this.physics.add.group({
-      key: 'star',
-      repeat: 11,
-      setScale: {x: 0.2, y: 0.2 },
-      setXY: { x:400, y: 300 }
-    });
+        this.load.image("boomerang", boomerang);
+    },
 
-    stars.children.iterate(function (child) {
-      child.setBounceY(Phaser.Math.FloatBetween(0.4, 0.8));
-      child.setVelocityX(150 - Math.random() * 300);
-      child.setVelocityY(150 - Math.random() * 300);
-      child.setBounce(1, 1);
-      child.setCollideWorldBounds(true);
-    });
+    create: function create() {
+        // Stage background
+        const bg = this.add.image(400, 300, "background");
+        bg.setScale(1.5, 1.5);
 
-    cursors = this.input.keyboard.createCursorKeys();
+        // Stage enemies
+        const enemies = this.physics.add.group({
+            key: "enemy",
+            repeat: Math.ceil(Math.random() * 10),
+            setScale: { x: 0.04, y: 0.04 },
+            setXY: { x: 750, y: 300 },
+        });
 
-    box = this.physics.add.image(400, 100, "tiles", 15);
+        enemies.children.iterate(function (child) {
+            child.setBounceY(Phaser.Math.FloatBetween(0.4, 0.8));
+            // child.setVelocityX(150 - Math.random() * 300);
+            child.setVelocityY(150 - Math.random() * 300);
+            child.setBounce(1, 1);
+            child.setCollideWorldBounds(true);
+        });
 
-    const processCollision = (box, star) => {
-      star.destroy();
-      const starsLeft = stars.countActive();
-      if (starsLeft === 0) {
-        this.scene.start('winscreen');
-      }
-    }
+        // Player avatar
+        avatar = this.physics.add.image(80, 200, "hero");
+        avatar.setCollideWorldBounds(true);
+        avatar.setScale(0.06, 0.06);
+        avatar.setBounce(1, 1);
 
-    this.physics.add.collider(
-      stars,
-      box,
-      processCollision,
-      null,
-      this
-    );
+        // Boomerang
+        weapon = this.physics.add.image(0, 0, "boomerang");
+        weapon.disableBody(false, true);
+        console.log(weapon);
 
+        // Keyboard inputs
+        cursors = this.input.keyboard.createCursorKeys();
+        console.log(cursors);
 
-    box.setBounce(1, 1);
-    box.setCollideWorldBounds(true);
-  },
-  update: function () {
-    const { velocity } = box.body;
+        // Process collision when boomerang hits enemy
+        const processEnemyCollision = (weapon, enemy) => {
+            enemy.destroy();
+            weapon.setVelocityX(-300);
+            const enemiesLeft = enemies.countActive();
+            if (enemiesLeft === 0) {
+                this.scene.start("winscreen");
+            }
+        };
 
-    if (cursors.space.isDown) {
-      const x = decelerate(velocity.x);
-      const y = decelerate(velocity.y);
-      box.setVelocity(x, y)
-    }
+        this.physics.add.collider(
+            enemies,
+            weapon,
+            processEnemyCollision,
+            null,
+            this
+        );
+    },
+    update: function () {
+        const { velocity } = avatar.body;
 
-    if (cursors.up.isDown) box.setVelocityY(accelerate(velocity.y, -1));
-    if (cursors.right.isDown) box.setVelocityX(accelerate(velocity.x, 1));
-    if (cursors.down.isDown) box.setVelocityY(accelerate(velocity.y, 1));
-    if (cursors.left.isDown) box.setVelocityX(accelerate(velocity.x, -1));
-  }
+        if (cursors.space.isDown && weapon.visible === false) {
+            console.log(weapon);
+            const { x: avatarX, y: avatarY } = avatar.getBottomLeft();
+
+            weapon.enableBody(true, avatarX + 80, avatarY - 35, true, true);
+            weapon.setCollideWorldBounds(true);
+            weapon.setScale(0.05, 0.05);
+            weapon.setAngularVelocity(500);
+            weapon.setVelocityX(500);
+            weapon.setBounce(1, 0);
+        }
+
+        //Weapon position
+        const { x: weaponXLeft, y: weaponYBottom } = weapon.getBottomLeft();
+        const { x: weaponXRight, y: weaponYTop } = weapon.getTopRight();
+
+        // avatar position
+        const { x: avatarXLeft, y: avatarYBottom } = avatar.getBottomLeft();
+        const { x: avatarXRight, y: avatarYTop } = avatar.getTopRight();
+        if (weaponXLeft < avatarXRight || weaponXRight < avatarXRight) {
+            weapon.disableBody(false, true);
+            weapon.setX(avatarXRight + 100);
+        }
+
+        if (cursors.shift.isDown) {
+            //Weapon position
+            const { x: weaponXLeft, y: weaponYBottom } = weapon.getBottomLeft();
+            const { x: weaponXRight, y: weaponYTop } = weapon.getTopRight();
+
+            // avatar position
+            const { x: avatarXLeft, y: avatarYBottom } = avatar.getBottomLeft();
+            const { x: avatarXRight, y: avatarYTop } = avatar.getTopRight();
+
+            console.log(
+                "weapon location",
+                `Top: ${weaponYTop}`,
+                `Bottom: ${weaponYBottom}`,
+                `Left: ${weaponXLeft}`,
+                `Right: ${weaponXRight}`
+            );
+
+            console.log(
+                "avatar location",
+                `Top: ${avatarYTop}`,
+                `Bottom: ${avatarYBottom}`,
+                `Left: ${avatarXLeft}`,
+                `Right: ${avatarXRight}`
+            );
+        }
+
+        if (cursors.up.isDown) avatar.setVelocityY(accelerate(velocity.y, -1));
+        // if (cursors.right.isDown)
+        //     avatar.setVelocityX(accelerate(velocity.x, 1));
+        if (cursors.down.isDown) avatar.setVelocityY(accelerate(velocity.y, 1));
+        // if (cursors.left.isDown)
+        //     avatar.setVelocityX(accelerate(velocity.x, -1));
+    },
 });
